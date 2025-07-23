@@ -51,7 +51,7 @@ python unit_tests.py test_flexo_simon32
 
 ### Expected Output
 Successful test runs should show output like:
-```bash
+```
 $ python unit_tests.py test_flexo_and
 --- Running test_gitm_and ---
 Test passed for AND(0, 0)
@@ -96,7 +96,7 @@ This option is suitable when quickly testing specific small, isolated µWM featu
 3. Create a function `test_asm_<muwm_name>` in [`unit_tests.py`](./src/unit_tests.py), which calls the `emulate_asm_<muwm_name>` function with the desired inputs (for instance, you can set this function up to enumerate all possible inputs, or iterate over a constant number of randomized inputs), and verifies this against a reference implementation.
 
 ## Binary Emulation
-Binary emulation is suitable when emulating specific regions of an ELF binary. We recommend emulating only the region of interest (which contains the actual µWM implementation code) and setting up memory manually to match what is expected by the µWM. An object dump can help with this setup. We recommend the following steps to set it up. Note that we follow our existing approach of grouping together µWMs from different frameworks -- in our case, those refer to Flexo (RSB-based [2]) and GITM (exception-based [1]). Feel free to omit the framework name if not applicable:
+Binary emulation is suitable when analyzing µWM ELF binaries. We recommend emulating only the region of interest (which contains the actual µWM implementation code) and setting up memory manually to match what is expected by the µWM. An object dump can help with this setup. We recommend the following steps to set it up. Note that we follow our existing approach of grouping together µWMs from different frameworks -- in our case, those refer to Flexo (RSB-based [2]) and GITM (exception-based [1]). Feel free to omit the framework name if not applicable:
 
 1. Add your µWM binary implementation in [`gates/<framework_name>`](./src/gates). 
 2. Create a function `emulate_<framework_name>_<muwm_name>` in [`tests/<framework_name>_tests.py`](./src/tests/asm_tests.py). This function takes logical inputs that would be passed to the µWM normally and sets up memory accordingly. Use the [`ELFLoader`](./src/loader.py) to automate memory setup and adapt its constants if necessary (e.g., if the memory regions are too small and memory contents overlap). Since Unicorn does not emulate dynamic library calls or system calls, you might have to add Unicorn hooks to simulate the effect of such calls.
