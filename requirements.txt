@@ -1,0 +1,4 @@
+capstone==5.0.5
+numpy==2.2.3
+pyelftools==0.31
+unicorn==2.1.2
