@@ -1,6 +1,6 @@
 # WeMu: Effective and Scalable Emulation of Microarchitectural Weird Machines
 
-This repository contains the artifact for the paper "WeMu: Effective and Scalable Emulation of Microarchitectural Weird Machines" submitted to uASC 2026.
+This repository contains the artifact for the paper "WeMu: Effective and Scalable Emulation of Microarchitectural Weird Machines" submitted to uASC 2026 (<paper_url>).
 
 WeMu is the first emulation framework designed specifically for analyzing Microarchitectural Weird Machines (µWMs), enabling observation and reverse engineering of hidden microarchitectural computations.
 
@@ -9,7 +9,7 @@ WeMu is the first emulation framework designed specifically for analyzing Microa
 ### Option 1: Docker (Recommended)
 ```bash
 # Clone and build (one-time setup)
-git clone https://anonymous.4open.science/r/wemu.git
+git clone <paper_artifact_repo.git>
 cd wemu
 docker build -t wemu .
 
