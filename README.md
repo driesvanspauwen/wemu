@@ -52,7 +52,7 @@ python unit_tests.py test_flexo_simon32
 ### Expected Output
 Successful test runs should show output like:
 ```
-$ python unit_tests.py test_flexo_and
+$ python unit_tests.py test_gitm_and
 --- Running test_gitm_and ---
 Test passed for AND(0, 0)
 Test passed for AND(0, 1)
