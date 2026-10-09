@@ -138,6 +138,7 @@ python ugir_cli.py replay trace.json
 python ugir_cli.py replay trace.json --at 42
 python ugir_cli.py verify-evidence --ugir-root /path/to/ugir
 python ugir_cli.py ingest-tlb native-capture.txt --threshold 39 --seed 5001 --trials-per-row 2000 --output tlb-trace.json
+python ugir_cli.py ingest-btb /path/to/rigger/data/amd_btb_readmit --run held-9003 --output btb-trace.json
 python -m unittest discover -s tests -p 'test_ugir_*.py'
 ```
 
@@ -191,6 +192,21 @@ state or predict the gate. A wrapper can perturb timings; compare an
 instrumented run with the original under the same CPU protocol before using
 it as silicon evidence. The [Raptor Lake capture report](docs/ugir-rpl-tlb-capture-2026-10-09.md)
 records the current native-run limitation.
+
+`ingest-btb` checks the pinned AMD Zen 3 one-shot BTB-AND manifest, report,
+and ordered CSV. It recomputes each truth row, control count, Wilson bound,
+seeded row shuffle, and whether one threshold could separate recorded hit and
+miss cycles. It reports the feasible integer threshold interval inferred from
+stored labels, and exports architectural readouts and PMU counts. The default
+pin is [`evidence/ugir-btb-amd-v1.json`](evidence/ugir-btb-amd-v1.json);
+`--pin` accepts a caller-held pin for another bundle with the same schema.
+The exact calibration threshold is missing; the inferred interval does not
+identify the value chosen by the native process. CPU and binary identity are
+self-attested in the manifest, and `replay` does not reopen the source. This
+one-shot result is preliminary, has no current UGIR oracle admission, and does
+not validate a reusable BTB register or WeMu's abstract predictor model. The
+[AMD BTB readout report](docs/ugir-amd-btb-readout-validation-2026-10-09.md)
+records the checked rows and provenance limits.
 
 Design and acceptance details are in [docs/ugir-extension-design.md](docs/ugir-extension-design.md)
 and [docs/ugir-extension-plan.md](docs/ugir-extension-plan.md).

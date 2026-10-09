@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "profile": "amd_zen3_btb_one_shot_and",
+  "manifest_sha256": "604e1464d4e363b138e8777dbff102028466ac198379717df5fb6e81ac6e1af1",
+  "report_sha256": "1570fbf48c32d722d8bdb265a6a5debecc08829a1c99675888695a91fcfef118",
+  "source_bundle": "rigger/data/amd_btb_readmit",
+  "oracle_admitted": false,
+  "calibration_threshold": "not_recorded"
+}

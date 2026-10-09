@@ -42,10 +42,10 @@ transition rules.
 3. Pure state models consume explicit events. This permits unit tests and
    native trace ingestion without Unicorn, and separates a transition model
    from a physical claim.
- 4. `EvidenceCase` binds each silicon example to a local raw file hash, source
-    path, CPU profile, class, expected observation, and verdict. Verification
-    rejects missing or mismatched sources; it never turns a model match into
-    an oracle admission.
+4. `EvidenceCase` binds each silicon example to a local raw file hash, source
+   path, CPU profile, class, expected observation, and verdict. Verification
+   rejects missing or mismatched sources; it never turns a model match into
+   an oracle admission.
 5. An optional four-row TLB-AND timer wrapper preserves ordered rail latencies
    from the gate's readout. Ingestion checks its self-reported threshold and
    seed, then recomputes H/J histograms and AND counts before producing trace
@@ -53,6 +53,13 @@ transition rules.
    replay alone cannot verify that source. CPU and binary identity require
    separate provenance. These events are architectural observations; they do
    not expose page-walk or replacement transitions.
+6. A pinned AMD Zen 3 BTB one-shot CSV importer preserves native attempt order,
+   real/sham signal cycles, decoded output, and PMU counts. It recounts truth
+   rows against a SHA-linked report, verifies seeded row shuffle, and requires
+   hit/miss cycle labels to admit a shared threshold. The exact calibration
+   threshold was not recorded; replay exposes the feasible interval implied
+   by stored labels, not the native process's chosen value. No BTB target or
+   reusable predictor-register transition is inferred from these readouts.
 
 The `cycle` field in trace JSON is a monotonic logical-order tick. It is not
 speculative depth, issue latency, or wall-clock CPU cycles. Cache line and

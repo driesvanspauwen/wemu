@@ -50,7 +50,7 @@ confusing model output with native oracle admission.
 ## Checkpoint: trace and evidence foundation
 
 - Tasks 2–5 are implemented for the stated abstract and cache scope. The
-  extension suite has 50 passing tests; existing GITM and Flexo suites produced
+  extension suite has 64 passing tests; existing GITM and Flexo suites produced
   28 and 66 pass lines with no failure lines. The assembly suite needs `nasm`,
   which was unavailable on the macOS host.
 - Fresh AMD native cache-AND runs and their negative controls are preserved in
@@ -64,6 +64,11 @@ confusing model output with native oracle admission.
   `/dev/tlb_device` is absent; see
   [the capture report](ugir-rpl-tlb-capture-2026-10-09.md). No TLB fidelity or
   oracle claim follows from the stub test.
+- The pinned AMD Zen 3 one-shot BTB bundle imports 4,000 ordered readouts per
+  seed. Four archived runs recount against their SHA-linked manifest and report;
+  see [the BTB readout report](ugir-amd-btb-readout-validation-2026-10-09.md).
+  This is preliminary source evidence with no recorded threshold, not a
+  reusable BTB register or WeMu-to-silicon fidelity result.
 
 ## Next acceptance gates for full UGIR compute coverage
 

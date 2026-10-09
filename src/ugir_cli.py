@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from ugir_evidence import EvidenceError, verify_manifest
+from ugir_btb_capture import load_btb_run
 from ugir_tlb_capture import MAX_CAPTURE_BYTES, parse_tlb_capture
 from ugir_trace import Replay, Trace, class_catalog
 
@@ -31,6 +32,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     capture_parser.add_argument("--seed", required=True, type=int)
     capture_parser.add_argument("--trials-per-row", required=True, type=int)
     capture_parser.add_argument("--output", required=True, type=Path)
+    btb_parser = command.add_parser("ingest-btb",
+                                    help="check pinned AMD one-shot BTB-AND readouts and export a trace")
+    btb_parser.add_argument("bundle", type=Path)
+    btb_parser.add_argument("--run", required=True)
+    btb_parser.add_argument("--pin", type=Path,
+                            default=Path(__file__).resolve().parents[1] /
+                            "evidence" / "ugir-btb-amd-v1.json")
+    btb_parser.add_argument("--output", required=True, type=Path)
     evidence_parser = command.add_parser("verify-evidence", help="verify pinned UGIR source records")
     evidence_parser.add_argument("--ugir-root", required=True, type=Path)
     evidence_parser.add_argument("--manifest", type=Path,
@@ -74,6 +83,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                                           for address, value in state.transient_stores],
                      "rsb": state.rsb,
                      "observations": state.observations,
+                     "btb_feasible_threshold_interval": state.btb_feasible_threshold_interval,
                      "model_fidelity": "not_assessed"})
         elif args.command == "ingest-tlb":
             if args.source.resolve() == args.output.resolve():
@@ -92,6 +102,32 @@ def main(argv: Optional[List[str]] = None) -> int:
                      "native_rows": captured.native_rows,
                      "min_row_wilson_lower_95": captured.min_row_wilson_lower_95,
                      "native_observation_only": True,
+                     "model_fidelity": "not_assessed"})
+        elif args.command == "ingest-btb":
+            with args.pin.open("rb") as stream:
+                pin_data = stream.read(1024 * 1024 + 1)
+            if len(pin_data) > 1024 * 1024:
+                raise ValueError("oversized AMD BTB pin")
+            pin = json.loads(pin_data.decode("utf-8"))
+            if (type(pin) is not dict or type(pin.get("schema_version")) is not int or
+                    pin["schema_version"] != 1 or
+                    pin.get("profile") != "amd_zen3_btb_one_shot_and" or
+                    pin.get("oracle_admitted") is not False or
+                    pin.get("calibration_threshold") != "not_recorded"):
+                raise ValueError("unsupported AMD BTB pin profile")
+            captured = load_btb_run(
+                args.bundle, args.run,
+                expected_manifest_sha256=pin.get("manifest_sha256"),
+                expected_report_sha256=pin.get("report_sha256"))
+            with args.output.open("x", encoding="utf-8") as stream:
+                stream.write(captured.trace.to_json() + "\n")
+            _output({"output": str(args.output), "events": len(captured.trace.events),
+                     "run_id": args.run, "source_sha256": captured.trace.metadata["source_sha256"],
+                     "native_rows": captured.native_rows,
+                     "min_row_wilson_lower_95": captured.min_row_wilson_lower_95,
+                     "feasible_threshold_interval": captured.feasible_threshold_interval,
+                     "calibration_threshold": "not_recorded",
+                     "oracle_admitted": False, "native_observation_only": True,
                      "model_fidelity": "not_assessed"})
         elif args.command == "verify-evidence":
             _output({"mode": "stored_silicon_evidence_verification",

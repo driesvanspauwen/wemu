@@ -214,6 +214,9 @@ class Replay:
         self.pending_stores: List[Tuple[int, Any]] = []
         self.transient_stores: List[Tuple[int, Any]] = []
         self.observations: List[Dict[str, Any]] = []
+        self._btb_readout_max_hit: Optional[int] = None
+        self._btb_readout_min_miss: Optional[int] = None
+        self._btb_readout_seen = False
         self.in_speculation = False
 
     @staticmethod
@@ -336,9 +339,55 @@ class Replay:
                                           "threshold": threshold,
                                           "raw1": raw1, "detected": detected,
                                           "success": success})
+            elif event.details.get("substrate") == "branch_predictor":
+                if event.details.get("scheme") != "amd_btb_one_shot_and":
+                    raise ValueError("unsupported BTB readout scheme")
+                values = {key: self._required_integer(event, key) for key in (
+                    "round", "a", "b", "expected", "real_signal_cycles",
+                    "real_signal_hit", "decoded", "correct",
+                    "sham_signal_cycles", "sham_signal_hit", "committed_equal",
+                    "indirect_misses", "branch_misses", "retired_branches",
+                    "sham_indirect_misses", "sham_branch_misses",
+                    "sham_retired_branches")}
+                if any(values[key] not in (0, 1) for key in (
+                        "a", "b", "expected", "real_signal_hit", "decoded",
+                        "correct", "sham_signal_hit", "committed_equal")) or (
+                        values["expected"] != (values["a"] & values["b"]) or
+                        values["real_signal_hit"] != values["decoded"] or
+                        values["correct"] != int(values["decoded"] == values["expected"])):
+                    raise ValueError("BTB readout truth or status differs")
+                max_hit = self._btb_readout_max_hit
+                min_miss = self._btb_readout_min_miss
+                for cycles, hit in ((values["real_signal_cycles"],
+                                     values["real_signal_hit"]),
+                                    (values["sham_signal_cycles"],
+                                     values["sham_signal_hit"])):
+                    if cycles == 0 or cycles > 0xFFFFFFFFFFFFFFFF:
+                        raise ValueError("BTB readout cycle count is outside native range")
+                    if hit:
+                        max_hit = max(cycles, max_hit or 0)
+                    else:
+                        min_miss = min(cycles, min_miss or cycles)
+                if (max_hit is not None and min_miss is not None and
+                        max_hit >= min_miss):
+                    raise ValueError("BTB readout labels admit no shared threshold")
+                self._btb_readout_max_hit = max_hit
+                self._btb_readout_min_miss = min_miss
+                self._btb_readout_seen = True
+                self.observations.append({"sequence": event.sequence, "kind": kind,
+                                          "substrate": "branch_predictor",
+                                          "scheme": "amd_btb_one_shot_and", **values})
             else:
                 self.observations.append({"sequence": event.sequence,
                                           "kind": kind, "details": dict(event.details)})
+
+    @property
+    def btb_feasible_threshold_interval(self) -> Optional[List[Optional[int]]]:
+        if not self._btb_readout_seen:
+            return None
+        return [self._btb_readout_max_hit,
+                (self._btb_readout_min_miss - 1
+                 if self._btb_readout_min_miss is not None else None)]
 
     def run(self, trace: Trace) -> "Replay":
         # Revalidate externally supplied or mutated traces before changing state.

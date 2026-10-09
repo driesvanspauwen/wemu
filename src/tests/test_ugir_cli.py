@@ -13,6 +13,7 @@ from ugir_cli import main
 from ugir_tlb_capture import MAX_CAPTURE_BYTES
 from ugir_trace import Trace
 from tests.test_ugir_tlb_capture import SAMPLE
+from tests.test_ugir_btb_capture import write_bundle
 
 
 class CliTests(unittest.TestCase):
@@ -117,6 +118,47 @@ class CliTests(unittest.TestCase):
             self.assertFalse(output.exists())
         self.assertEqual(status, 2)
         self.assertIn("bounded bytes", result["error"])
+
+    def test_pinned_btb_bundle_can_be_imported_and_replayed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory)
+            manifest_hash, report_hash = write_bundle(bundle)
+            pin = bundle / "pin.json"
+            pin.write_text(json.dumps({
+                "schema_version": 1, "profile": "amd_zen3_btb_one_shot_and",
+                "manifest_sha256": manifest_hash, "report_sha256": report_hash,
+                "oracle_admitted": False, "calibration_threshold": "not_recorded"}),
+                encoding="utf-8")
+            output = bundle / "btb-trace.json"
+            status, result = self.run_cli("ingest-btb", str(bundle),
+                                          "--run", "held-1", "--pin", str(pin),
+                                          "--output", str(output))
+            replay_status, replay = self.run_cli("replay", str(output), "--at", "2")
+        self.assertEqual((status, replay_status), (0, 0))
+        self.assertEqual(result["native_rows"]["11"], [2, 2])
+        self.assertFalse(result["oracle_admitted"])
+        self.assertEqual(result["feasible_threshold_interval"], [68, 305])
+        self.assertEqual(replay["btb_feasible_threshold_interval"], [None, 305])
+        self.assertEqual(replay["observations"][-1]["scheme"],
+                         "amd_btb_one_shot_and")
+
+    def test_btb_pin_boolean_schema_version_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory)
+            manifest_hash, report_hash = write_bundle(bundle)
+            pin = bundle / "pin.json"
+            pin.write_text(json.dumps({
+                "schema_version": True, "profile": "amd_zen3_btb_one_shot_and",
+                "manifest_sha256": manifest_hash, "report_sha256": report_hash,
+                "oracle_admitted": False, "calibration_threshold": "not_recorded"}),
+                encoding="utf-8")
+            output = bundle / "trace.json"
+            status, result = self.run_cli("ingest-btb", str(bundle),
+                                          "--run", "held-1", "--pin", str(pin),
+                                          "--output", str(output))
+            self.assertFalse(output.exists())
+        self.assertEqual(status, 2)
+        self.assertIn("pin profile", result["error"])
 
 
 if __name__ == "__main__":
