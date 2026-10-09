@@ -34,7 +34,8 @@ transition rules.
 
 1. `MicroEvent` captures guest instruction, address, phase, logical-order tick,
    and a typed event kind. Event sequence numbers and a versioned JSON export
-   make traces independently replayable.
+   make traces independently replayable. The CLI can inspect the modeled state
+   immediately after any event, including an open speculation window.
 2. Current Unicorn hooks emit cache and RSB events at instruction and
    speculation boundaries. Predictor, translation, and buffer events are
    explicit abstract replay inputs; no native Unicorn monitor emits them yet.

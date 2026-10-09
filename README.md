@@ -135,12 +135,17 @@ open("trace.json", "w", encoding="utf-8").write(trace.to_json())
 cd src
 python ugir_cli.py capabilities
 python ugir_cli.py replay trace.json
+python ugir_cli.py replay trace.json --at 42
 python ugir_cli.py verify-evidence --ugir-root /path/to/ugir
 python -m unittest discover -s tests -p 'test_ugir_*.py'
 ```
 
 The cache and exception/RSB mechanisms remain the instruction-executed
 baseline described in the [WeMu paper](https://vanbulck.net/files/uasc26-wemu.pdf).
+`replay --at` shows the state after one trace event, including speculative
+stores, RSB contents, cache lines, and the abstract predictor/translation
+registers. The full trace can be inspected without requiring a completed
+speculation window at the selected event.
 BTB, TLB, and memory-dependence transitions in `ugir_trace.py` are deliberately
 abstract replay models. They expose hypotheses for testing; they do not
 emulate those UGIR gates from binaries or establish CPU-specific fidelity.

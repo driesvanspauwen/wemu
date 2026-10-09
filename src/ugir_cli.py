@@ -2,6 +2,7 @@
 
 import argparse
 from collections import Counter
+from dataclasses import asdict
 import json
 from pathlib import Path
 from typing import List, Optional
@@ -20,6 +21,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     command.add_parser("capabilities", help="show substrate capability and evidence scope")
     replay_parser = command.add_parser("replay", help="inspect a versioned WeMu trace")
     replay_parser.add_argument("trace", type=Path)
+    replay_parser.add_argument("--at", type=int, metavar="SEQUENCE",
+                               help="show state immediately after this event")
     evidence_parser = command.add_parser("verify-evidence", help="verify pinned UGIR source records")
     evidence_parser.add_argument("--ugir-root", required=True, type=Path)
     evidence_parser.add_argument("--manifest", type=Path,
@@ -36,18 +39,30 @@ def main(argv: Optional[List[str]] = None) -> int:
                      for name, spec in class_catalog().items()})
         elif args.command == "replay":
             trace = Trace.from_json(args.trace.read_text(encoding="utf-8"))
-            state = Replay(trace.line_size, trace.page_size).run(trace)
-            if state.in_speculation:
+            if args.at is not None and (args.at < 0 or args.at >= len(trace.events)):
+                raise ValueError("event sequence is out of range")
+            viewed = (Trace(trace.events[:args.at + 1], trace.line_size,
+                            trace.page_size) if args.at is not None else trace)
+            state = Replay(trace.line_size, trace.page_size).run(viewed)
+            if args.at is None and state.in_speculation:
                 raise ValueError("incomplete trace: speculation remains active")
-            _output({"trace_version": 1, "events": len(trace.events),
+            _output({"trace_version": 1, "events": len(viewed.events),
+                     "selected_event": (asdict(trace.events[args.at])
+                                        if args.at is not None else None),
                      "model": {"line_size": trace.line_size,
-                               "page_size": trace.page_size,
-                               "clock": "logical_order"},
-                     "event_counts": dict(sorted(Counter(event.kind for event in trace.events).items())),
+                                "page_size": trace.page_size,
+                                "clock": "logical_order"},
+                     "event_counts": dict(sorted(Counter(event.kind for event in viewed.events).items())),
+                     "in_speculation": state.in_speculation,
                      "cache_lines": sorted(state.cache_lines),
                      "btb": {str(key): value for key, value in sorted(state.btb.items())},
                      "tlb": {str(key): value for key, value in sorted(state.tlb.items())},
                      "mdp": {str(key): value for key, value in sorted(state.mdp.items())},
+                     "pending_stores": [{"address": address, "value": value}
+                                        for address, value in state.pending_stores],
+                     "transient_stores": [{"address": address, "value": value}
+                                          for address, value in state.transient_stores],
+                     "rsb": state.rsb,
                      "observations": state.observations,
                      "model_fidelity": "not_assessed"})
         elif args.command == "verify-evidence":

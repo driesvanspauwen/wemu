@@ -50,7 +50,7 @@ confusing model output with native oracle admission.
 ## Checkpoint: trace and evidence foundation
 
 - Tasks 2–5 are implemented for the stated abstract and cache scope. The
-  extension suite has 39 passing tests; existing GITM and Flexo suites produced
+  extension suite has 41 passing tests; existing GITM and Flexo suites produced
   28 and 66 pass lines with no failure lines. The assembly suite needs `nasm`,
   which was unavailable on the macOS host.
 - Fresh AMD native cache-AND runs and their negative controls are preserved in
