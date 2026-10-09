@@ -10,7 +10,9 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from ugir_cli import main
+from ugir_tlb_capture import MAX_CAPTURE_BYTES
 from ugir_trace import Trace
+from tests.test_ugir_tlb_capture import SAMPLE
 
 
 class CliTests(unittest.TestCase):
@@ -81,6 +83,40 @@ class CliTests(unittest.TestCase):
             status, result = self.run_cli("replay", str(source), "--at", "2")
         self.assertEqual(status, 2)
         self.assertIn("event", result["error"])
+
+    def test_ordered_tlb_capture_can_be_imported_and_inspected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "native.txt"
+            trace_path = Path(directory) / "trace.json"
+            source.write_text(SAMPLE, encoding="utf-8")
+            status, result = self.run_cli("ingest-tlb", str(source),
+                                          "--threshold", "39",
+                                          "--seed", "5001",
+                                          "--trials-per-row", "1",
+                                          "--output", str(trace_path))
+            replay_status, replay = self.run_cli("replay", str(trace_path),
+                                                 "--at", "3")
+        self.assertEqual((status, replay_status), (0, 0))
+        self.assertEqual(result["native_rows"]["1,1"], [1, 1])
+        self.assertEqual(result["model_fidelity"], "not_assessed")
+        self.assertEqual(replay["metadata"]["source_kind"],
+                         "ugir_tlb_ordered_v1")
+        self.assertTrue(replay["observations"][-1]["raw1"])
+
+    def test_tlb_ingest_rejects_oversize_source_without_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "oversize.txt"
+            output = Path(directory) / "trace.json"
+            with source.open("wb") as stream:
+                stream.truncate(MAX_CAPTURE_BYTES + 1)
+            status, result = self.run_cli("ingest-tlb", str(source),
+                                          "--threshold", "39",
+                                          "--seed", "5001",
+                                          "--trials-per-row", "1",
+                                          "--output", str(output))
+            self.assertFalse(output.exists())
+        self.assertEqual(status, 2)
+        self.assertIn("bounded bytes", result["error"])
 
 
 if __name__ == "__main__":

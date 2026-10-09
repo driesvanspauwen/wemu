@@ -119,12 +119,21 @@ class Event:
 
 class Trace:
     def __init__(self, events: Optional[List[Event]] = None,
-                 line_size: int = 64, page_size: int = 4096):
+                 line_size: int = 64, page_size: int = 4096,
+                 metadata: Optional[Dict[str, Any]] = None):
         for name, size in (("line_size", line_size), ("page_size", page_size)):
             if not _integer(size) or size <= 0 or size & (size - 1):
                 raise ValueError(f"{name} must be a positive power of two")
         self.line_size = line_size
         self.page_size = page_size
+        if metadata is not None and (not isinstance(metadata, dict) or
+                                     any(type(key) is not str for key in metadata)):
+            raise ValueError("trace metadata must be a JSON object with string keys")
+        self.metadata = dict(metadata or {})
+        try:
+            json.dumps(self.metadata, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("trace metadata must contain finite JSON values") from exc
         self.events: List[Event] = []
         self._transient = False
         for event in events or []:
@@ -162,8 +171,9 @@ class Trace:
     def to_json(self) -> str:
         return json.dumps({"version": TRACE_VERSION,
                            "model": {"line_size": self.line_size,
-                                     "page_size": self.page_size,
-                                     "clock": "logical_order"},
+                                      "page_size": self.page_size,
+                                      "clock": "logical_order"},
+                           "metadata": self.metadata,
                            "events": [asdict(event) for event in self.events]},
                           sort_keys=True, separators=(",", ":"))
 
@@ -180,7 +190,8 @@ class Trace:
                 raise ValueError("trace model configuration missing or unsupported")
             events = [Event(**entry) for entry in obj["events"]]
             return cls(events, line_size=model["line_size"],
-                       page_size=model["page_size"])
+                       page_size=model["page_size"],
+                       metadata=obj.get("metadata", {}))
         except (TypeError, KeyError) as exc:
             raise ValueError("malformed trace") from exc
 
@@ -300,10 +311,39 @@ class Replay:
                 self.rsb.pop()
             self.observations.append({"sequence": event.sequence, "kind": kind,
                                       "target": predicted})
+        elif kind == "readout":
+            if event.details.get("substrate") == "tlb_page_walk":
+                row = event.details.get("row")
+                if row not in ("0,0", "1,0", "0,1", "1,1"):
+                    raise ValueError("TLB readout requires a valid input row")
+                trial = self._required_integer(event, "trial")
+                rail1 = self._required_integer(event, "rail1_latency")
+                rail0 = self._required_integer(event, "rail0_latency")
+                threshold = self._required_integer(event, "threshold")
+                if threshold == 0:
+                    raise ValueError("TLB readout threshold must be positive")
+                raw1, hit0 = rail1 < threshold, rail0 < threshold
+                detected = raw1 == hit0
+                success = not detected and raw1 == (row == "1,1")
+                for key, expected in (("raw1", raw1), ("detected", detected),
+                                      ("success", success)):
+                    if event.details.get(key) is not expected:
+                        raise ValueError(f"TLB readout {key} differs from latencies")
+                self.observations.append({"sequence": event.sequence, "kind": kind,
+                                          "row": row, "trial": trial,
+                                          "rail1_latency": rail1,
+                                          "rail0_latency": rail0,
+                                          "threshold": threshold,
+                                          "raw1": raw1, "detected": detected,
+                                          "success": success})
+            else:
+                self.observations.append({"sequence": event.sequence,
+                                          "kind": kind, "details": dict(event.details)})
 
     def run(self, trace: Trace) -> "Replay":
         # Revalidate externally supplied or mutated traces before changing state.
-        validated = Trace(trace.events, trace.line_size, trace.page_size)
+        validated = Trace(trace.events, trace.line_size, trace.page_size,
+                          trace.metadata)
         if (self.line_size, self.page_size) != (validated.line_size, validated.page_size):
             raise ValueError("replay model parameters differ from trace")
         candidate = Replay(self.line_size, self.page_size)

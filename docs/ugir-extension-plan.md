@@ -50,7 +50,7 @@ confusing model output with native oracle admission.
 ## Checkpoint: trace and evidence foundation
 
 - Tasks 2–5 are implemented for the stated abstract and cache scope. The
-  extension suite has 41 passing tests; existing GITM and Flexo suites produced
+  extension suite has 50 passing tests; existing GITM and Flexo suites produced
   28 and 66 pass lines with no failure lines. The assembly suite needs `nasm`,
   which was unavailable on the macOS host.
 - Fresh AMD native cache-AND runs and their negative controls are preserved in
@@ -59,6 +59,11 @@ confusing model output with native oracle admission.
 - Verifier agents challenged the replay and evidence invariants. Their
   actionable findings were reproduced as failing tests and fixed. The report
   records provenance limits for the older non-Git AMD source.
+- Ordered TLB readout ingestion is implemented and tested against an independent
+  native stub. A live Raptor Lake A/A comparison could not start because
+  `/dev/tlb_device` is absent; see
+  [the capture report](ugir-rpl-tlb-capture-2026-10-09.md). No TLB fidelity or
+  oracle claim follows from the stub test.
 
 ## Next acceptance gates for full UGIR compute coverage
 

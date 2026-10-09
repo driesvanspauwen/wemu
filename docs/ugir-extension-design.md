@@ -42,10 +42,17 @@ transition rules.
 3. Pure state models consume explicit events. This permits unit tests and
    native trace ingestion without Unicorn, and separates a transition model
    from a physical claim.
-4. `EvidenceCase` binds each silicon example to a local raw file hash, source
-   path, CPU profile, class, expected observation, and verdict. Verification
-   rejects missing or mismatched sources; it never turns a model match into
-   an oracle admission.
+ 4. `EvidenceCase` binds each silicon example to a local raw file hash, source
+    path, CPU profile, class, expected observation, and verdict. Verification
+    rejects missing or mismatched sources; it never turns a model match into
+    an oracle admission.
+5. An optional four-row TLB-AND timer wrapper preserves ordered rail latencies
+   from the gate's readout. Ingestion checks its self-reported threshold and
+   seed, then recomputes H/J histograms and AND counts before producing trace
+   events. The trace hash is computed from the native bytes at ingestion;
+   replay alone cannot verify that source. CPU and binary identity require
+   separate provenance. These events are architectural observations; they do
+   not expose page-walk or replacement transitions.
 
 The `cycle` field in trace JSON is a monotonic logical-order tick. It is not
 speculative depth, issue latency, or wall-clock CPU cycles. Cache line and
@@ -61,8 +68,10 @@ start of emulation is emitted before the first guest instruction.
   modeled microarchitectural side effect.
 - Exception AND/OR/NOT, RSB NAND, and representative UGIR silicon examples
   have explicit expected outcomes, including rejected and unmeasured rows.
-- A replay with an unsupported event, malformed sequence, wrong evidence
-  hash, or ambiguous source fails closed.
+- A replay with an unsupported event or malformed sequence fails closed.
+  `verify-evidence` rejects wrong pinned source hashes and ambiguous source
+  records; `ingest-tlb` computes a hash from its input. Replay alone does not
+  reopen the original silicon source.
 - Native tests run only on a compatible x86-64 Linux host; other hosts can
   verify stored raw evidence and run deterministic tests. Reports identify
   which mode ran and list skipped native checks.
@@ -72,6 +81,8 @@ roles to the same AMD exception-cache record. These are two roles of one
 construction, not independent silicon runs. The TLB sham is a killed-window
 control with different address geometry from the real case; reports retain
 that distinction. Raw aggregate and histogram sources lack per-attempt order.
+The new ordered TLB capture protocol retains that order when its optional
+wrapper can run, but requires an A/A check against the uninstrumented gate.
 
 ## Deferred research questions
 

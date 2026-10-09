@@ -137,6 +137,7 @@ python ugir_cli.py capabilities
 python ugir_cli.py replay trace.json
 python ugir_cli.py replay trace.json --at 42
 python ugir_cli.py verify-evidence --ugir-root /path/to/ugir
+python ugir_cli.py ingest-tlb native-capture.txt --threshold 39 --seed 5001 --trials-per-row 2000 --output tlb-trace.json
 python -m unittest discover -s tests -p 'test_ugir_*.py'
 ```
 
@@ -175,6 +176,21 @@ the UGIR runner; the portable tests verify stored evidence only.
 An [AMD live validation report](docs/ugir-amd-live-validation-2026-10-09.md)
 retains four raw cache-AND records from two source versions and two seeds;
 the version-specific reader and admission policy are recorded there.
+
+`ingest-tlb` accepts four-row AND output from the optional
+[`native/ugir_tlb_ordered_capture.c`](native/ugir_tlb_ordered_capture.c)
+timer wrapper linked to an existing UGIR TLB gate object. It checks that each
+ordered rail latency reconstructs the source's H/J histograms and AND counts,
+then exports one architectural readout event per trial. The capture header
+records the wrapper's threshold, seed, row count, and gate label; ingestion
+requires them to match the requested threshold, seed, and count. The trace preserves
+attempt order and a SHA-256 computed from the native output at ingestion.
+`replay` does not reopen that source or verify its hash. CPU/core and binary
+identity must be retained separately. The trace does not expose hidden TLB
+state or predict the gate. A wrapper can perturb timings; compare an
+instrumented run with the original under the same CPU protocol before using
+it as silicon evidence. The [Raptor Lake capture report](docs/ugir-rpl-tlb-capture-2026-10-09.md)
+records the current native-run limitation.
 
 Design and acceptance details are in [docs/ugir-extension-design.md](docs/ugir-extension-design.md)
 and [docs/ugir-extension-plan.md](docs/ugir-extension-plan.md).

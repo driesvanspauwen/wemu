@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from ugir_evidence import EvidenceError, verify_manifest
+from ugir_tlb_capture import MAX_CAPTURE_BYTES, parse_tlb_capture
 from ugir_trace import Replay, Trace, class_catalog
 
 
@@ -23,6 +24,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     replay_parser.add_argument("trace", type=Path)
     replay_parser.add_argument("--at", type=int, metavar="SEQUENCE",
                                help="show state immediately after this event")
+    capture_parser = command.add_parser("ingest-tlb",
+                                        help="check four-row native TLB-AND readouts and export a trace")
+    capture_parser.add_argument("source", type=Path)
+    capture_parser.add_argument("--threshold", required=True, type=int)
+    capture_parser.add_argument("--seed", required=True, type=int)
+    capture_parser.add_argument("--trials-per-row", required=True, type=int)
+    capture_parser.add_argument("--output", required=True, type=Path)
     evidence_parser = command.add_parser("verify-evidence", help="verify pinned UGIR source records")
     evidence_parser.add_argument("--ugir-root", required=True, type=Path)
     evidence_parser.add_argument("--manifest", type=Path,
@@ -42,7 +50,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             if args.at is not None and (args.at < 0 or args.at >= len(trace.events)):
                 raise ValueError("event sequence is out of range")
             viewed = (Trace(trace.events[:args.at + 1], trace.line_size,
-                            trace.page_size) if args.at is not None else trace)
+                            trace.page_size, trace.metadata)
+                      if args.at is not None else trace)
             state = Replay(trace.line_size, trace.page_size).run(viewed)
             if args.at is None and state.in_speculation:
                 raise ValueError("incomplete trace: speculation remains active")
@@ -52,6 +61,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                      "model": {"line_size": trace.line_size,
                                 "page_size": trace.page_size,
                                 "clock": "logical_order"},
+                     "metadata": trace.metadata,
                      "event_counts": dict(sorted(Counter(event.kind for event in viewed.events).items())),
                      "in_speculation": state.in_speculation,
                      "cache_lines": sorted(state.cache_lines),
@@ -64,6 +74,24 @@ def main(argv: Optional[List[str]] = None) -> int:
                                           for address, value in state.transient_stores],
                      "rsb": state.rsb,
                      "observations": state.observations,
+                     "model_fidelity": "not_assessed"})
+        elif args.command == "ingest-tlb":
+            if args.source.resolve() == args.output.resolve():
+                raise ValueError("output trace must differ from native source")
+            with args.source.open("rb") as stream:
+                data = stream.read(MAX_CAPTURE_BYTES + 1)
+            captured = parse_tlb_capture(data,
+                                         threshold=args.threshold,
+                                         seed=args.seed,
+                                         trials_per_row=args.trials_per_row)
+            with args.output.open("x", encoding="utf-8") as stream:
+                stream.write(captured.trace.to_json() + "\n")
+            _output({"output": str(args.output),
+                     "source_sha256": captured.trace.metadata["source_sha256"],
+                     "events": len(captured.trace.events),
+                     "native_rows": captured.native_rows,
+                     "min_row_wilson_lower_95": captured.min_row_wilson_lower_95,
+                     "native_observation_only": True,
                      "model_fidelity": "not_assessed"})
         elif args.command == "verify-evidence":
             _output({"mode": "stored_silicon_evidence_verification",
