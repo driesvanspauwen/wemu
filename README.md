@@ -113,6 +113,67 @@ The [`MuWMEmulator`](./src/emulator.py) produces execution traces for debugging 
             self.logger.log(message)
     ```
 
+## UGIR substrate extension
+
+The extension adds a versioned microarchitectural trace to `MuWMEmulator` and
+a capability registry covering UGIR's five demonstrated compute classes and
+eight observed-only classes. Pass `trace=Trace()` when constructing an
+emulator, then save `trace.to_json()` to inspect or replay state changes.
+Tracing is optional; the original gate runners keep their existing API.
+
+```python
+from emulator import MuWMEmulator
+from ugir_trace import Trace
+
+trace = Trace()
+emulator = MuWMEmulator(name="example", loader=loader, trace=trace, debug=False)
+# Set the usual code start, exit, and input state, then call emulator.emulate().
+open("trace.json", "w", encoding="utf-8").write(trace.to_json())
+```
+
+```bash
+cd src
+python ugir_cli.py capabilities
+python ugir_cli.py replay trace.json
+python ugir_cli.py verify-evidence --ugir-root /path/to/ugir
+python -m unittest discover -s tests -p 'test_ugir_*.py'
+```
+
+The cache and exception/RSB mechanisms remain the instruction-executed
+baseline described in the [WeMu paper](https://vanbulck.net/files/uasc26-wemu.pdf).
+BTB, TLB, and memory-dependence transitions in `ugir_trace.py` are deliberately
+abstract replay models. They expose hypotheses for testing; they do not
+emulate those UGIR gates from binaries or establish CPU-specific fidelity.
+Observed-only classes have no gate-emulation capability. The capability CLI
+reports each mechanism's status explicitly.
+
+`verify-evidence` checks six cases across five distinct primary UGIR source
+files, including one rejected control, against SHA-256 and recorded native
+counts. Cache and transient-window roles share one AMD record; they are not
+independent silicon runs. Three positive JSON records are aggregate oracle
+outputs, so they do not preserve per-attempt order or timing. The TLB
+histogram also lacks attempt order; its sham has different address geometry.
+The TLB report therefore marks `sham_source_recount_verified: true` and
+`controls_verified: false`; the latter does not invalidate the recorded counts.
+Most referenced UGIR `data/` records are gitignored in that separate checkout;
+provide the exact local source files or the verifier fails. Its result reports
+`model_fidelity: not_assessed` even when a source oracle status is admitted.
+Its `source_verified` field means the pinned bytes and selected measurements
+were checked; `schema_validation: not_assessed` means this command did not run
+the version-specific UGIR reader.
+The CPU string in the manifest is an annotation. JSON cases verify source
+model and machine IDs; the TLB batch verifies logical CPU index 4, not the
+human CPU model. Trace `cycle` values are logical-order ticks, not silicon
+timings or speculative depth.
+Native reproduction requires the source's supported x86-64 Linux CPU and
+the UGIR runner; the portable tests verify stored evidence only.
+An [AMD live validation report](docs/ugir-amd-live-validation-2026-10-09.md)
+retains four raw cache-AND records from two source versions and two seeds;
+the version-specific reader and admission policy are recorded there.
+
+Design and acceptance details are in [docs/ugir-extension-design.md](docs/ugir-extension-design.md)
+and [docs/ugir-extension-plan.md](docs/ugir-extension-plan.md).
+
 # References
 
 [1] Wang, P. L., Brown, F., & Wahby, R. S. (2023, May). The ghost is the machine: Weird machines in transient execution. In *2023 IEEE Security and Privacy Workshops (SPW)* (pp. 264-272). IEEE.

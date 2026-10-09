@@ -81,6 +81,10 @@ class LRUCache():
     
     def get_tag(self, address) -> int:
         return address // (self.line_size * self.amt_sets)
+
+    def resident_lines(self):
+        return {(tag * self.amt_sets + set_index) * self.line_size
+                for set_index, ways in self.cache.items() for tag, _ in ways}
     
     def is_cached(self, address) -> bool:
         set_index = self.get_set_index(address)
@@ -221,6 +225,9 @@ class InfiniteCache():
         self.debug = debug
         
         self.cache = set()
+
+    def resident_lines(self):
+        return set(self.cache)
     
     def is_cached(self, address) -> bool:
         # Align address to cache line boundary

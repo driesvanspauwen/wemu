@@ -20,6 +20,8 @@ class RSB:
         """
         if predicted_addr not in self.exception_addrs:
             self.stack.append(predicted_addr)
+            return True
+        return False
     
     def pop_ret_addr(self) -> int:
         if self.stack:

@@ -1,0 +1,683 @@
+{
+  "E": {
+    "body": {
+      "arch_effects": [],
+      "clobbers": [
+        "A",
+        "B",
+        "scratch"
+      ],
+      "consumes": [
+        "A@setup",
+        "B@setup"
+      ],
+      "microarch_effects": [
+        {
+          "channel": "cache_llc",
+          "effect": "O is transiently fetched iff both A and B hit inside the window (dependent chain gates the demand load of O)"
+        }
+      ],
+      "produces": [
+        "O@body"
+      ]
+    },
+    "readout": {
+      "arch_effects": [
+        "harness output bit = decoded resident(O)"
+      ],
+      "clobbers": [
+        "O"
+      ],
+      "consumes": [
+        "O@body"
+      ],
+      "microarch_effects": [
+        {
+          "channel": "cache_llc",
+          "effect": "timed reload of O: fast => resident(O)'=1, slow => 0"
+        }
+      ],
+      "produces": []
+    },
+    "setup": {
+      "arch_effects": [
+        "A,B residency set per input",
+        "O flushed"
+      ],
+      "clobbers": [
+        "scratch"
+      ],
+      "consumes": [],
+      "microarch_effects": [
+        {
+          "channel": "tlb",
+          "effect": "TLB warmed for A,B,O"
+        }
+      ],
+      "produces": [
+        "A@setup",
+        "B@setup"
+      ]
+    }
+  },
+  "P": {
+    "arch_setup": "Single logical core, SMT sibling idle, fixed frequency; A,B residency set per trial input; O flushed via clflush.",
+    "destructive_reads": [
+      "O"
+    ],
+    "resources": [
+      {
+        "encoding": "resident=1;absent=0",
+        "id": "A",
+        "kind": "cache_line",
+        "level": "L1D",
+        "precondition": "resident in L1 iff input A=1, else flushed"
+      },
+      {
+        "encoding": "resident=1;absent=0",
+        "id": "B",
+        "kind": "cache_line",
+        "level": "L1D",
+        "precondition": "resident in L1 iff input B=1, else flushed"
+      },
+      {
+        "encoding": "resident=1;absent=0",
+        "id": "O",
+        "kind": "cache_line",
+        "level": "LLC",
+        "precondition": "flushed (evicted) before the trigger"
+      }
+    ]
+  },
+  "Pi": {
+    "asserted": [
+      {
+        "feature": "vendor",
+        "op": "in",
+        "value": [
+          "Intel",
+          "AMD",
+          "Apple"
+        ]
+      },
+      {
+        "feature": "platform_config",
+        "op": "eq",
+        "value": "bare_metal"
+      }
+    ],
+    "model": {
+      "artifact": null,
+      "predictions": [],
+      "split_unit": "entire_feature_class",
+      "status": "not_fit",
+      "target": "R_given_available_readout"
+    },
+    "passing_classes": [
+      "C1"
+    ]
+  },
+  "R": {
+    "admission_floor_phi": 0.8,
+    "all_rows": true,
+    "confidence": 0.95,
+    "interval": "Wilson_two_sided_no_continuity_correction",
+    "metric": "min_row_success_rate",
+    "ordering": "randomly_interleaved",
+    "reprepare": true,
+    "sham_alpha": 0.01,
+    "trials_per_row": 1000,
+    "z": 1.959963984540054
+  },
+  "T": {
+    "accounting": "setup+body+readout+shared/batch_size",
+    "batch_size": 64,
+    "excludes": [
+      "session calibration",
+      "compilation",
+      "experimental logging",
+      "timer bracket overhead"
+    ],
+    "includes": [
+      "input preparation",
+      "fault-window settle delay",
+      "body/recovery",
+      "output probe",
+      "shared address-map initialization"
+    ],
+    "unit": "core_cycles"
+  },
+  "W": {
+    "duration_mechanism": "window length bounded by the fault's execute-to-retirement latency; both A,B hits must complete before O's dependent load issues, before the #DE is recognized and the chain is squashed",
+    "instruction_budget": {
+      "declared_insns": 6,
+      "declared_uops": 8
+    },
+    "transient": true,
+    "trigger": "deterministic divide-by-zero (#DE) fault opening a transient window over the AND body's dependent-load chain"
+  },
+  "admission": {
+    "failing_class_ids": [],
+    "notes": "Single-variant on-silicon measurement of the Single-rail cache AND gate on AMD AMD family 0x19 model 0x21.",
+    "overall_status": "admitted",
+    "passing_class_ids": [
+      "C1"
+    ],
+    "unavailable_class_ids": []
+  },
+  "classes": [
+    {
+      "aggregated_R": {
+        "admitted": true,
+        "complete": true,
+        "min_row_success_rate": 1.0,
+        "min_row_wilson_lower_95": 0.9961732415144449,
+        "rule": "min_over_members"
+      },
+      "aggregated_T": {
+        "complete": true,
+        "max_amortized_p95_cycles": 8874.0,
+        "max_per_invocation_cycles": 8840.0,
+        "rule": "max_over_members"
+      },
+      "class_id": "C1",
+      "class_key": {
+        "btb_geometry": null,
+        "microcode_revision": "0xa201211",
+        "platform_config": "bare_metal",
+        "prefetcher_family": null,
+        "rob_capacity": null,
+        "uarch_generation": "AMD family 0x19 model 0x21",
+        "vendor": "AMD"
+      },
+      "disagreement": false,
+      "member_status": [
+        {
+          "min_row_wilson_lower_95": 0.9961732415144449,
+          "status": "pass",
+          "variant_id": "V1"
+        }
+      ],
+      "member_variant_ids": [
+        "V1"
+      ],
+      "verdict": "unanimous_pass"
+    }
+  ],
+  "id": "ugir:cache-and-gate.single-rail",
+  "name": "Single-rail cache AND gate",
+  "record_state": "measured",
+  "semantics": "resident(O)' = resident(A) AND resident(B)",
+  "synthetic": false,
+  "truth_table": {
+    "inputs": [
+      "A",
+      "B"
+    ],
+    "outputs": [
+      "O"
+    ],
+    "rows": [
+      {
+        "bits": "00",
+        "expected": {
+          "O": false
+        }
+      },
+      {
+        "bits": "01",
+        "expected": {
+          "O": false
+        }
+      },
+      {
+        "bits": "10",
+        "expected": {
+          "O": false
+        }
+      },
+      {
+        "bits": "11",
+        "expected": {
+          "O": true
+        }
+      }
+    ]
+  },
+  "variants": [
+    {
+      "R_measured": {
+        "admission_mode": {
+          "mode": "single_shot"
+        },
+        "correction_policy": {
+          "policy": "none"
+        },
+        "meets_floor": true,
+        "meets_reliability_floor": true,
+        "meets_sham_separation": true,
+        "min_row_success_rate": 1.0,
+        "min_row_wilson_lower_95": 0.9961732415144449,
+        "min_separation_margin": 0.9923464830288897,
+        "n_expected_one_rows": 1,
+        "native_readout": {
+          "admitted": true,
+          "meets_reliability_floor": true,
+          "meets_sham_separation": true,
+          "min_row_success_rate": 1.0,
+          "min_row_wilson_lower_95": 0.9961732415144449,
+          "native_reads_used": {
+            "mean": 1.0,
+            "total": 4000
+          },
+          "readout": {
+            "decoder": "hit_miss_threshold",
+            "max_reads": 1,
+            "mode": "single_destructive",
+            "preserves_output": false,
+            "stop_rule": "fixed_n",
+            "tie_or_erasure_rule": "treat_as_failure"
+          },
+          "rows": [
+            {
+              "bits": "00",
+              "resident_count": 0,
+              "resident_rate": 0.0,
+              "success_rate": 1.0,
+              "successes": 1000,
+              "trials": 1000,
+              "wilson_lower_95": 0.9961732415144449
+            },
+            {
+              "bits": "01",
+              "resident_count": 0,
+              "resident_rate": 0.0,
+              "success_rate": 1.0,
+              "successes": 1000,
+              "trials": 1000,
+              "wilson_lower_95": 0.9961732415144449
+            },
+            {
+              "bits": "10",
+              "resident_count": 0,
+              "resident_rate": 0.0,
+              "success_rate": 1.0,
+              "successes": 1000,
+              "trials": 1000,
+              "wilson_lower_95": 0.9961732415144449
+            },
+            {
+              "bits": "11",
+              "resident_count": 1000,
+              "resident_rate": 1.0,
+              "success_rate": 1.0,
+              "successes": 1000,
+              "trials": 1000,
+              "wilson_lower_95": 0.9961732415144449
+            }
+          ]
+        },
+        "noise_conditions": "on-silicon; see session.config for the recorded SMT/frequency/mitigation state",
+        "rows": [
+          {
+            "bits": "00",
+            "resident_count": 0,
+            "resident_rate": 0.0,
+            "success_rate": 1.0,
+            "successes": 1000,
+            "trials": 1000,
+            "wilson_lower_95": 0.9961732415144449
+          },
+          {
+            "bits": "01",
+            "resident_count": 0,
+            "resident_rate": 0.0,
+            "success_rate": 1.0,
+            "successes": 1000,
+            "trials": 1000,
+            "wilson_lower_95": 0.9961732415144449
+          },
+          {
+            "bits": "10",
+            "resident_count": 0,
+            "resident_rate": 0.0,
+            "success_rate": 1.0,
+            "successes": 1000,
+            "trials": 1000,
+            "wilson_lower_95": 0.9961732415144449
+          },
+          {
+            "bits": "11",
+            "resident_count": 1000,
+            "resident_rate": 1.0,
+            "success_rate": 1.0,
+            "successes": 1000,
+            "trials": 1000,
+            "wilson_lower_95": 0.9961732415144449
+          }
+        ],
+        "separation_rows": [
+          {
+            "bits": "11",
+            "gate_wilson_lower_95": 0.9961732415144449,
+            "passed": true,
+            "separation_margin": 0.9923464830288897,
+            "sham_wilson_upper_95": 0.003826758485555124
+          }
+        ],
+        "single_shot": {
+          "min_row_success_rate": 1.0,
+          "min_row_wilson_lower_95": 0.9961732415144449,
+          "readout": {
+            "decoder": "hit_miss_threshold",
+            "max_reads": 1,
+            "mode": "single_destructive",
+            "preserves_output": false,
+            "stop_rule": "fixed_n",
+            "tie_or_erasure_rule": "treat_as_failure"
+          },
+          "reads_used": 1,
+          "rows": [
+            {
+              "bits": "00",
+              "resident_count": 0,
+              "resident_rate": 0.0,
+              "success_rate": 1.0,
+              "successes": 1000,
+              "trials": 1000,
+              "wilson_lower_95": 0.9961732415144449
+            },
+            {
+              "bits": "01",
+              "resident_count": 0,
+              "resident_rate": 0.0,
+              "success_rate": 1.0,
+              "successes": 1000,
+              "trials": 1000,
+              "wilson_lower_95": 0.9961732415144449
+            },
+            {
+              "bits": "10",
+              "resident_count": 0,
+              "resident_rate": 0.0,
+              "success_rate": 1.0,
+              "successes": 1000,
+              "trials": 1000,
+              "wilson_lower_95": 0.9961732415144449
+            },
+            {
+              "bits": "11",
+              "resident_count": 1000,
+              "resident_rate": 1.0,
+              "success_rate": 1.0,
+              "successes": 1000,
+              "trials": 1000,
+              "wilson_lower_95": 0.9961732415144449
+            }
+          ]
+        }
+      },
+      "T_measured": {
+        "amortized_p95_cycles": 8874.0,
+        "batch_amortized_cycles": 8840.0,
+        "batch_size": 64,
+        "body_cycles": 0.0,
+        "per_invocation_cycles": 8840.0,
+        "readout_cycles": 544.0,
+        "setup_cycles": 8296.0,
+        "shared_batch_cycles": 0.0,
+        "timer_overhead_cycles": 102.0
+      },
+      "calibration": {
+        "date": "2026-10-09T04:11:25Z",
+        "machine_fingerprint": "fp:AMD:AMD family 0x19 model 0x21",
+        "per_class_error": {
+          "absent_error": 0.0,
+          "resident_error": 0.0
+        },
+        "probe_count_per_state": 10000,
+        "readout_available": true,
+        "readout_class": "flush_reload",
+        "session_id": "S1791519085",
+        "status": "available",
+        "threshold_cycles": 255,
+        "timer": "serialized rdtscp (invariant-TSC ticks; equals core cycles only at a fixed reference frequency — see session.config; a verified unhalted-core-cycle rdpmc path is not yet wired)"
+      },
+      "class_id": "C1",
+      "controls": {
+        "negative_sham": {
+          "alpha": 0.01,
+          "chi2": 0.0,
+          "df": 3,
+          "failed_as_required": true,
+          "independence_method": "near_silent_convention (min expected resident cell < 5; asymptotic chi-square not applied)",
+          "input_independent": true,
+          "near_silent": true,
+          "p_value": 1.0,
+          "resident_rates": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "sham_rows": [
+            {
+              "bits": "00",
+              "resident_count": 0,
+              "resident_rate": 0.0,
+              "single_shot_resident_count": 0,
+              "single_shot_successes": 1000,
+              "success_rate": 1.0,
+              "successes": 1000,
+              "trials": 1000
+            },
+            {
+              "bits": "01",
+              "resident_count": 0,
+              "resident_rate": 0.0,
+              "single_shot_resident_count": 0,
+              "single_shot_successes": 1000,
+              "success_rate": 1.0,
+              "successes": 1000,
+              "trials": 1000
+            },
+            {
+              "bits": "10",
+              "resident_count": 0,
+              "resident_rate": 0.0,
+              "single_shot_resident_count": 0,
+              "single_shot_successes": 1000,
+              "success_rate": 1.0,
+              "successes": 1000,
+              "trials": 1000
+            },
+            {
+              "bits": "11",
+              "resident_count": 0,
+              "resident_rate": 0.0,
+              "single_shot_resident_count": 0,
+              "single_shot_successes": 0,
+              "success_rate": 0.0,
+              "successes": 0,
+              "trials": 1000
+            }
+          ]
+        },
+        "positive_control": {
+          "confirmed_same_session": true,
+          "resident_rate": 1.0,
+          "samples": 256,
+          "seed_gadget_id": "ugir:seed.flushreload.independent-line"
+        }
+      },
+      "machine_id": "testbed-amd-family-0x19-model-0x21",
+      "model_name": "AMD AMD family 0x19 model 0x21",
+      "pi_features": {
+        "btb_geometry": null,
+        "microcode_revision": "0xa201211",
+        "platform_config": "bare_metal",
+        "prefetcher_family": null,
+        "rob_capacity": null,
+        "uarch_generation": "AMD family 0x19 model 0x21",
+        "vendor": "AMD"
+      },
+      "reasons": [],
+      "session": {
+        "blocking": {
+          "block_size": 800,
+          "block_sizes": [
+            800,
+            800,
+            800,
+            800,
+            800,
+            800,
+            800,
+            800,
+            800,
+            800
+          ],
+          "n_blocks": 10,
+          "schedule_digest": "fnv1a64:cce564b4215e99e1",
+          "scheme": "randomized_matched_blocks"
+        },
+        "config": {
+          "construction": {},
+          "cpu_vulnerabilities": {
+            "gather_data_sampling": "Not affected",
+            "ghostwrite": "Not affected",
+            "indirect_target_selection": "Not affected",
+            "itlb_multihit": "Not affected",
+            "l1tf": "Not affected",
+            "mds": "Not affected",
+            "meltdown": "Not affected",
+            "mmio_stale_data": "Not affected",
+            "old_microcode": "Not affected",
+            "reg_file_data_sampling": "Not affected",
+            "retbleed": "Not affected",
+            "spec_rstack_overflow": "Mitigation: Safe RET",
+            "spec_store_bypass": "Mitigation: Speculative Store Bypass disabled via prctl",
+            "spectre_v1": "Mitigation: usercopy/swapgs barriers and __user pointer sanitization",
+            "spectre_v2": "Mitigation: Retpolines; IBPB: conditional; IBRS_FW; STIBP: always-on; RSB filling; PBRSB-eIBRS: Not affected; BHI: Not affected",
+            "srbds": "Not affected",
+            "tsa": "Mitigation: Clear CPU buffers",
+            "tsx_async_abort": "Not affected",
+            "vmscape": "Mitigation: IBPB before exit to userspace"
+          },
+          "kernel_cmdline": "BOOT_IMAGE=/boot/vmlinuz-7.0.0-38-generic root=UUID=e096a01b-1dd4-41e5-97fa-30b3e123d348 ro quiet splash crashkernel=2G-4G:320M,4G-32G:512M,32G-64G:1024M,64G-128G:2048M,128G-:4096M",
+          "mitigations_off_flag": false,
+          "note": "read-only snapshot; the oracle does not set kernel parameters",
+          "os": {
+            "machine": "x86_64",
+            "release": "7.0.0-38-generic",
+            "sysname": "Linux",
+            "version": "#38-Ubuntu SMP PREEMPT_DYNAMIC Fri Sep  4 09:10:14 UTC 2026"
+          },
+          "prefetcher_msr_0x1a4": "unreadable",
+          "readout_attribution": {
+            "decoder": "hit_miss_threshold",
+            "meaning": "detected_errors are decoder erasures/ties; undetected_errors are resolved logical values unequal to the declared truth-table output",
+            "native_readout": [
+              {
+                "bits": "00",
+                "detected_errors": 0,
+                "erasure_count": 0,
+                "resolved_false": 1000,
+                "resolved_true": 0,
+                "trials": 1000,
+                "undetected_errors": 0
+              },
+              {
+                "bits": "01",
+                "detected_errors": 0,
+                "erasure_count": 0,
+                "resolved_false": 1000,
+                "resolved_true": 0,
+                "trials": 1000,
+                "undetected_errors": 0
+              },
+              {
+                "bits": "10",
+                "detected_errors": 0,
+                "erasure_count": 0,
+                "resolved_false": 1000,
+                "resolved_true": 0,
+                "trials": 1000,
+                "undetected_errors": 0
+              },
+              {
+                "bits": "11",
+                "detected_errors": 0,
+                "erasure_count": 0,
+                "resolved_false": 0,
+                "resolved_true": 1000,
+                "trials": 1000,
+                "undetected_errors": 0
+              }
+            ],
+            "single_shot": [
+              {
+                "bits": "00",
+                "detected_errors": 0,
+                "erasure_count": 0,
+                "resolved_false": 1000,
+                "resolved_true": 0,
+                "trials": 1000,
+                "undetected_errors": 0
+              },
+              {
+                "bits": "01",
+                "detected_errors": 0,
+                "erasure_count": 0,
+                "resolved_false": 1000,
+                "resolved_true": 0,
+                "trials": 1000,
+                "undetected_errors": 0
+              },
+              {
+                "bits": "10",
+                "detected_errors": 0,
+                "erasure_count": 0,
+                "resolved_false": 1000,
+                "resolved_true": 0,
+                "trials": 1000,
+                "undetected_errors": 0
+              },
+              {
+                "bits": "11",
+                "detected_errors": 0,
+                "erasure_count": 0,
+                "resolved_false": 0,
+                "resolved_true": 1000,
+                "trials": 1000,
+                "undetected_errors": 0
+              }
+            ]
+          },
+          "scaling_cur_freq_khz": "1742662",
+          "scaling_governor": "performance",
+          "smt_active": "1",
+          "source": "hardware"
+        },
+        "id": "S1791519085",
+        "shuffle_seed": 606,
+        "started_at": "2026-10-09T04:11:25Z"
+      },
+      "status": "pass",
+      "variant_id": "V1",
+      "weirdness": {
+        "a": "supported",
+        "b": "supported",
+        "c": "supported",
+        "evidence": "a: measured on-silicon: relational committed-state observation (exact post-body register state or generic within-row register delta, as recorded by the construction; writable-memory byte delta) across 4 input rows vs the negative sham, from a separate diagnostic run (not the timing runs); criterion (a) is scoped to committed gadget architectural state (general-purpose registers + the writable A/B/O/decoy/seed/scratch memory the gate touches) from the completed-input-encoding boundary to the last boundary before readout, EXCLUDING the declared observation channel (timer/PMU) | b: Flush+Reload (timed reload of O) recovers O on silicon; an independent positive-seed line confirmed this session | c: measured on-silicon via perf_event_open (PERF_COUNT_HW_INSTRUCTIONS (retired), signed medians over 2000 reps: fire=136, skipped_body=136, architectural_body=142; computing-body retirement = count(fire)-count(skipped_body); positive control = count(architectural)-count(skipped_body) must be >= 5; fire and skipped_body run the matched-control design uses analogous fault+SIGFPE-handler wrappers and the same jmp epilogue, differing only in whether the chain follows the landing; PERF_COUNT_HW_BRANCH_MISSES is optional and its matched-control design is: matched-control design: branch misses are not the declared #DE trigger; no absolute miss count is assumed): transient-body retired=0 (signed; tol 1), positive-control (architectural chain) delta=6 (min 5), observed signed branch-miss median delta=1; this delta is not an absolute miss count. Intended control design: matched-control design: fire and skipped_body use analogous #DE/SIGFPE wrappers; construction design: the chain's loads are placed after the divide-by-zero and should be squashed when the fault is recognized at retirement"
+      },
+      "window_measured": {
+        "cycles_p05": 0.0,
+        "cycles_p95": 136.0,
+        "measured_window_cycles": 0.0,
+        "method": "measured: window pass as time(fire)-time(skip), each bracketed on its own (prepare outside both), over 256 reps (fire = Mode::Exception, the #DE/SIGFPE wrapper intended to open the transient window; skip = a matched-control #DE/SIGFPE wrapper with a zero-body landing); NOT a dependent-delay sweep; achieved_uops requires a µop PMU counter"
+      }
+    }
+  ],
+  "version": "1.0"
+}

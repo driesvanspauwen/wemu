@@ -574,12 +574,7 @@ def emulate_flexo_sha1_2blocks(block1, block2, debug=False):
 
     def hook_round_debug(uc, address, size, user_data):
         if address in [0x1560, 0x28e90, 0x50820, 0x7a560]:
-            emulator.persist_pending_loads()
-            emulator.cache.reset()
-            emulator.in_speculation = False
-            emulator.speculation_depth = 0
-            emulator.speculation_limit = 0
-            emulator.timer.cycles = 0
+            emulator.reset_round_state()
             try:
                 rdi = uc.reg_read(UC_X86_REG_RDI)
                 rsi = uc.reg_read(UC_X86_REG_RSI)

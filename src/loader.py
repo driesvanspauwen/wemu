@@ -71,10 +71,10 @@ class ELFLoader(Loader):
     
     def load(self, emulator: EmulatorInterface):
         """Load ELF file into the emulator"""
-        self.f = open(self.elf_path, "rb")
-        self.elf = ELFFile(self.f)
-        
-        self.map_segments(emulator)
+        with open(self.elf_path, "rb") as stream:
+            self.elf = ELFFile(stream)
+            self.map_segments(emulator)
+        self.elf = None
         self.map_stack(emulator)
     
     def map_segments(self, emulator: EmulatorInterface):
@@ -123,5 +123,3 @@ class ELFLoader(Loader):
         emulator.logger.log(f"Mapping stack with base 0x{self.stack_addr:x} and size 0x{self.stack_size:x}")
         emulator.uc.mem_map(self.stack_addr, self.stack_size, UC_PROT_READ | UC_PROT_WRITE)
         emulator.uc.reg_write(UC_X86_REG_RSP, self.stack_addr + self.stack_size - 0x100)
-
-        

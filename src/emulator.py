@@ -6,6 +6,7 @@ from logger import Logger
 from cache import *
 from rsb import RSB
 from read_timer import Timer
+from ugir_trace import Trace
 from loader import *
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64, CsInsn
 from capstone.x86 import *
@@ -24,7 +25,8 @@ class MuWMEmulator():
     REGULAR_INSTR_CYCLES = 1  # Regular instruction timing
     MAX_SPEC_WINDOW = 250
 
-    def __init__(self, name: str, loader: Loader, cache: Cache = None, debug: bool = True):
+    def __init__(self, name: str, loader: Loader, cache: Cache = None,
+                 debug: bool = True, trace: Trace = None):
         # initialize unicorn
         self.uc = Uc(UC_ARCH_X86, UC_MODE_64)
         self.pending_fault_id: int = 0
@@ -53,6 +55,18 @@ class MuWMEmulator():
 
         # Timing (for rdtscp support)
         self.timer = Timer()
+        # Logical order clock: not a CPU latency or speculative-depth estimate.
+        self.trace = trace
+        self.trace_cycle = 0
+        self._trace_cache_lines = set()
+        self._trace_seeded = False
+        if trace is not None:
+            if trace.events:
+                raise ValueError("trace must be empty when attached to an emulator")
+            if trace.line_size != self.cache.line_size:
+                raise ValueError("trace line size differs from cache model")
+            if not hasattr(self.cache, "resident_lines"):
+                raise ValueError("traced cache requires resident_lines()")
 
         # instructions
         self.curr_insn: CsInsn
@@ -83,6 +97,34 @@ class MuWMEmulator():
         self.uc.hook_add(UC_HOOK_MEM_WRITE, self.mem_write_hook, self)
         self.uc.hook_add(UC_HOOK_CODE, self.instruction_hook, self)
 
+    def _trace(self, kind: str, address: int = None, instruction: int = None,
+               details: dict = None):
+        if self.trace is not None:
+            self.trace.add(kind, cycle=self.trace_cycle,
+                           phase="transient" if self.in_speculation else "architectural",
+                           address=address, instruction=instruction, details=details)
+
+    def _trace_cache_state(self, changed_address: int = None):
+        if self.trace is None:
+            return
+        if changed_address is not None and isinstance(self.cache, InfiniteCache):
+            line = (changed_address // self.cache.line_size) * self.cache.line_size
+            resident = line in self.cache.cache
+            recorded = line in self._trace_cache_lines
+            if resident and not recorded:
+                self._trace("cache_fill", address=line)
+                self._trace_cache_lines.add(line)
+            elif recorded and not resident:
+                self._trace("cache_evict", address=line)
+                self._trace_cache_lines.remove(line)
+            return
+        current = self.cache.resident_lines()
+        for address in sorted(self._trace_cache_lines - current):
+            self._trace("cache_evict", address=address)
+        for address in sorted(current - self._trace_cache_lines):
+            self._trace("cache_fill", address=address)
+        self._trace_cache_lines = current
+
     def checkpoint(self, emulator: Uc, next_insn_addr: int):
         flags = emulator.reg_read(UC_X86_REG_EFLAGS)
         context = emulator.context_save()
@@ -100,6 +142,8 @@ class MuWMEmulator():
         # modelling this fault handler is difficult, so we manually hardcode the effect of the fault handler
         insn_addr_after_fault = self.curr_insn.address + 256
         self.checkpoint(self.uc, insn_addr_after_fault)
+        self._trace("spec_begin", instruction=self.curr_insn.address,
+                    details={"trigger": "divide_error"})
         
         self.in_speculation = True
         self.speculation_limit = self.MAX_SPEC_WINDOW
@@ -116,6 +160,9 @@ class MuWMEmulator():
 
     def speculate_rsb_misprediction(self, actual_ret_addr: int, predicted_ret_addr: int):
         self.checkpoint(self.uc, actual_ret_addr)
+        self._trace("spec_begin", instruction=self.curr_insn.address,
+                    details={"trigger": "rsb", "predicted": predicted_ret_addr,
+                             "actual": actual_ret_addr})
         self.uc.reg_write(UC_X86_REG_RIP, predicted_ret_addr)
 
         self.in_speculation = True
@@ -145,24 +192,34 @@ class MuWMEmulator():
         
         for insn in self.cs.disasm(insn_bytes, address, 1): # disassemble only one instruction
             self.timer.increase_cycles(self.REGULAR_INSTR_CYCLES)
+            self.trace_cycle += 1
 
             self.curr_insn = insn
             self.curr_insn_address = address
             self.next_insn_addr = address + size
+            self._trace("instruction", instruction=address,
+                        details={"mnemonic": insn.mnemonic, "size": insn.size})
             self.log(f"Executing 0x{address:x}: {insn.mnemonic} {insn.op_str}")
 
             if address == self.code_exit_addr:
-                self.finish_emulation()
+                if self.in_speculation:
+                    self.uc.emu_stop()
+                else:
+                    self.finish_emulation()
                 return
 
             if insn.mnemonic == "call":
                 return_addr = address + insn.size
                 self.log(f"\tCall instruction detected, adding to RSB: 0x{return_addr:x}")
 
-                self.rsb.add_ret_addr(return_addr)
+                if self.rsb.add_ret_addr(return_addr):
+                    self._trace("rsb_push", instruction=address,
+                                details={"target": return_addr})
             
             if insn.mnemonic == "ret":
                 predicted_ret_addr = self.rsb.pop_ret_addr()
+                self._trace("rsb_pop", instruction=address,
+                            details={"target": predicted_ret_addr})
                 self.log(f"\tReturn instruction detected, popping from RSB: 0x{predicted_ret_addr:x}")
 
                 rsp = uc.reg_read(UC_X86_REG_RSP)
@@ -181,6 +238,8 @@ class MuWMEmulator():
             # Check if instruction is rdtscp
             if insn.mnemonic == "rdtscp":
                 self.persist_pending_loads()  # rdtscp waits until all previous loads are globally visisble (Intel manual v2)
+                self._trace("readout", instruction=address,
+                            details={"kind": "rdtscp"})
                 self.timer.rdtscp(self)
                 self.skip_curr_insn()
                 return
@@ -211,6 +270,9 @@ class MuWMEmulator():
                         # Flush this address from the cache
                         self.log(f"\tFlushing address 0x{flush_addr:x} from cache")
                         self.cache.flush_address(flush_addr)
+                        self._trace("cache_flush", address=flush_addr,
+                                    instruction=address)
+                        self._trace_cache_state(flush_addr)
                         break
                 
                 self.skip_curr_insn()
@@ -244,10 +306,15 @@ class MuWMEmulator():
 
     def mem_read_hook(self, uc: Uc, access, address: int, size: int, value, user_data):
         _, regs_written = self.curr_insn.regs_access()
+        cache_hit = self.cache.is_cached(address)
 
         # cache miss: add address and registers to pending
-        if not self.cache.is_cached(address):
+        if not cache_hit:
             self.timer.increase_cycles(self.CACHE_MISS_CYCLES)
+            self.trace_cycle += 1
+            self._trace("memory_read", address=address,
+                        instruction=self.curr_insn_address,
+                        details={"size": size, "cache_hit": False})
             for reg in regs_written:
                 self.pending_cache_misses.add(reg)
                 if self.in_speculation:
@@ -261,14 +328,21 @@ class MuWMEmulator():
                         self.speculation_depth += self.CACHE_MISS_CYCLES
                         self.log(f"\tReading cache address 0x{address:x}")
                         self.cache.read(address, uc)
+                        self._trace_cache_state(address)
                 else:
                     self.cache.read(address, uc)
+                    self._trace_cache_state(address)
             self.log(f"\tMemory read: address=0x{address:x}, size={size}, CACHE MISS")
         
         # cache hit: remove address and registers from pending
         else:
             self.timer.increase_cycles(self.REGULAR_INSTR_CYCLES)
+            self.trace_cycle += 1
+            self._trace("memory_read", address=address,
+                        instruction=self.curr_insn_address,
+                        details={"size": size, "cache_hit": True})
             self.cache.read(address, uc)
+            self._trace_cache_state(address)
             # self.pending_memory_loads.discard(address)
             # for reg in regs_written:
             #     self.remove_pending_register(reg)
@@ -279,6 +353,10 @@ class MuWMEmulator():
 
     def mem_write_hook(self, uc: Uc, access, address: int, size: int, value, user_data):
         self.cache.write(address, value)
+        self._trace("memory_write", address=address,
+                    instruction=self.curr_insn_address,
+                    details={"size": size, "value": value})
+        self._trace_cache_state(address)
         if self.in_speculation:
             # store the original value in case we need to rollback
             original_value = uc.mem_read(address, size)
@@ -289,11 +367,14 @@ class MuWMEmulator():
         self.log(f"RSP before rollback: 0x{self.uc.reg_read(UC_X86_REG_RSP):x}")
         state, next_insn_addr, flags = self.checkpoints.pop()
         
+        self.persist_pending_loads()
+        self._trace("spec_end", instruction=self.curr_insn_address,
+                    details={"rollback": True})
+
         # reset speculative state
         self.in_speculation = False
         self.speculation_depth = 0
         self.speculation_limit = 0
-        self.persist_pending_loads()
         
         # restore registers
         self.uc.context_restore(state)
@@ -319,9 +400,25 @@ class MuWMEmulator():
         self._pretty_print_pending_state(indent=1)
         for address in self.pending_memory_loads:
             self.cache.write(address, self.uc.mem_read(address, self.cache.line_size))
+            self._trace("pending_load_fill", address=address,
+                        instruction=self.curr_insn_address)
+            self._trace_cache_state(address)
         self.pending_memory_loads.clear()
         self.pending_registers.clear()
         self.pending_cache_misses.clear()
+
+    def reset_round_state(self):
+        """Reset the existing Flexo round state through trace-aware transitions."""
+        self.persist_pending_loads()
+        self.cache.reset()
+        self._trace_cache_state()
+        if self.in_speculation:
+            self._trace("spec_end", details={"rollback": False,
+                                             "trigger": "round_reset"})
+        self.in_speculation = False
+        self.speculation_depth = 0
+        self.speculation_limit = 0
+        self.timer.cycles = 0
 
     def can_resolve_deps(self, insn: CsInsn):
         """
@@ -382,6 +479,11 @@ class MuWMEmulator():
 
     
     def emulate(self):
+        if self.trace is not None and not self._trace_seeded:
+            self._trace_cache_state()
+            for target in self.rsb.stack:
+                self._trace("rsb_push", details={"target": target})
+            self._trace_seeded = True
         start_address = self.code_start_address
         while True:
             self.pending_fault_id = 0
@@ -395,7 +497,7 @@ class MuWMEmulator():
                 self.log(f"Execution mode: {'speculative (limit: ' + str(self.speculation_limit) + ')' if self.in_speculation else 'normal'}")
                 self.uc.emu_start(start_address, -1)
 
-                if self.curr_insn_address == self.code_exit_addr:
+                if self.curr_insn_address == self.code_exit_addr and not self.in_speculation:
                     return
                 
             except UcError as e:

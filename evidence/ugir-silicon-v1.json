@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "description": "Local UGIR aggregate and histogram records; these sources are external to WeMu and some are gitignored in UGIR. Hashes bind this manifest to exact bytes.",
+  "cases": [
+    {
+      "id": "zen3-exception-cache-and",
+      "substrate": "cache",
+      "cpu": "AMD Ryzen 7 5700X (Zen 3), Linux x86-64",
+      "source_model": "AMD AMD family 0x19 model 0x21",
+      "source_machine_id": "testbed-amd-family-0x19-model-0x21",
+      "format": "ugir_aggregate",
+      "path": "data/amd_5700x_cacheand/fidelity-fix-2026-10-01/amd-cacheand-final-default-seed-505.json",
+      "sha256": "7e8c47779ef87485febad1c94f4a4d39046af8d38f3106e13d8cc82ee323664e",
+      "expected": {"transient": true, "admission": "admitted", "rows": {"00": [1000, 1000], "01": [1000, 1000], "10": [1000, 1000], "11": [1000, 999]}}
+    },
+    {
+      "id": "zen3-exception-window-and",
+      "substrate": "transient_ooo_window",
+      "cpu": "AMD Ryzen 7 5700X (Zen 3), Linux x86-64",
+      "source_model": "AMD AMD family 0x19 model 0x21",
+      "source_machine_id": "testbed-amd-family-0x19-model-0x21",
+      "format": "ugir_aggregate",
+      "path": "data/amd_5700x_cacheand/fidelity-fix-2026-10-01/amd-cacheand-final-default-seed-505.json",
+      "sha256": "7e8c47779ef87485febad1c94f4a4d39046af8d38f3106e13d8cc82ee323664e",
+      "expected": {"transient": true, "admission": "admitted", "rows": {"00": [1000, 1000], "01": [1000, 1000], "10": [1000, 1000], "11": [1000, 999]}}
+    },
+    {
+      "id": "broadwell-cwt-and",
+      "substrate": "branch_predictor",
+      "cpu": "Intel Broadwell, Linux x86-64",
+      "source_model": "Intel Broadwell",
+      "source_machine_id": "testbed-broadwell",
+      "format": "ugir_aggregate",
+      "path": "data/cwt_cross_platform/raw/broadwell_faithful_and_2026-10-04/oracle_admission_V1_ADMITTED_2026-10-04.json",
+      "sha256": "01c4260d8fadd93ea487fb9aa1d0feae5148b80d8d6aede2829d7e36a3b3a9b5",
+      "expected": {"transient": true, "admission": "admitted", "rows": {"00": [1000, 1000], "01": [1000, 1000], "10": [1000, 1000], "11": [1000, 973]}}
+    },
+    {
+      "id": "broadwell-cwt-and-unresolved-control",
+      "substrate": "branch_predictor",
+      "cpu": "Intel Broadwell, Linux x86-64",
+      "source_model": "Intel Broadwell",
+      "source_machine_id": "testbed-broadwell",
+      "format": "ugir_rejection",
+      "path": "data/cwt_cross_platform/raw/broadwell_faithful_and_2026-10-04/oracle_admission_V1_final_2026-10-04.json",
+      "sha256": "0e8b00921f23ad27330abd331c8330c3ec4097f5b1268571aae9680f1ef632b7",
+      "expected": {"transient": true, "admission": "rejected", "variant_status": "invalid", "weirdness_c": "unresolved", "reason": "weirdness_c_unresolved"}
+    },
+    {
+      "id": "raptor-lake-p-tlb-and-seed-5001",
+      "substrate": "tlb_page_walk",
+      "cpu": "Intel Core i7-14700 Raptor Cove P-core, Linux x86-64",
+      "format": "tlb_histogram",
+      "path": "reproductions/ctrl-alt-tlb/rpl_audit_20261007/raw/h1/P_AND_m17_o64k_s5001.txt",
+      "sha256": "9534799f9f9a4c447a9e3c9a8854ecaaf924db849da4cf37ad495e04fe6909c0",
+      "sham_path": "reproductions/ctrl-alt-tlb/rpl_audit_20261007/raw/h1/P_AND_sham_m0_s5001.txt",
+      "sham_sha256": "69f031024a0769486d81d606e618955b0258f699c88a69b4464c1709c4ca572c",
+      "batch_path": "reproductions/ctrl-alt-tlb/rpl_audit_20261007/raw/h1/batch.log",
+      "batch_sha256": "77ba72611183767d2c7117a8886cf8e0cd95ca3720bc0396b163d4b940f362cc",
+      "expected": {
+        "rows": {"0,0": [2000, 1999], "1,0": [2000, 1999], "0,1": [2000, 1999], "1,1": [2000, 1998]},
+        "sham_rows": {"0,0": [2000, 0], "1,0": [2000, 0], "0,1": [2000, 0], "1,1": [2000, 0]},
+        "threshold": 39,
+        "native_cpu_index": 4,
+        "seed": 5001,
+        "real_elf": "AND_m17_j512_x3_S_o65536_s64.elf",
+        "sham_elf": "AND_m0_j512_x3_S_o4096_s32.elf",
+        "sham_geometry_matched": false
+      }
+    },
+    {
+      "id": "broadwell-mdp-nand-process-1",
+      "substrate": "load_store_fill_dependence_buffers",
+      "cpu": "Intel Broadwell, Linux x86-64",
+      "source_model": "Intel Broadwell",
+      "source_machine_id": "testbed-broadwell",
+      "format": "ugir_aggregate",
+      "path": "data/mdp_nand_broadwell/raw/20260930_a117d7e/process-1.json",
+      "sha256": "473a4bbfdf9783cb7aae1d622fcfe85257e39e354181ae1f3acca8c95ba21778",
+      "expected": {"transient": false, "admission": "admitted", "rows": {"00": [1000, 1000], "01": [1000, 998], "10": [1000, 1000], "11": [1000, 1000]}}
+    }
+  ]
+}
